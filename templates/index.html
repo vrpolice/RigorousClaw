@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RigorousClaw | Unified Chat</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .chat-container {
+            max-width: 800px;
+            margin: 30px auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            height: 85vh;
+        }
+
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fff;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .chat-header h4 {
+            margin: 0;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #fdfdfd;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            max-width: 85%;
+            line-height: 1.5;
+            padding: 12px 16px;
+            border-radius: 16px;
+            position: relative;
+            word-wrap: break-word;
+        }
+
+        .msg-user {
+            background: #007bff;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 2px;
+        }
+
+        .msg-agent {
+            background: #e9ecef;
+            color: #333;
+            margin-right: auto;
+            border-bottom-left-radius: 2px;
+        }
+
+        .chat-input {
+            padding: 20px;
+            border-top: 1px solid #eee;
+            background: #fff;
+            border-radius: 0 0 12px 12px;
+        }
+
+        .chat-input form {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input input {
+            flex: 1;
+            border-radius: 20px;
+            padding: 10px 20px;
+            border: 1px solid #ddd;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input input:focus {
+            border-color: #007bff;
+        }
+
+        .chat-input button {
+            border-radius: 20px;
+            padding: 10px 25px;
+            font-weight: 500;
+        }
+
+        .upload-btn {
+            background: none;
+            border: 1px solid #ddd;
+            border-radius: 50%;
+            width: 42px;
+            height: 42px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .upload-btn:hover {
+            border-color: #007bff;
+            background: #f0f7ff;
+        }
+
+        .tools-link {
+            color: #6c757d;
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: color 0.2s;
+        }
+
+        .tools-link:hover {
+            color: #007bff;
+        }
+
+        pre {
+            background: #2b2b2b;
+            color: #f8f8f2;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 0.9em;
+        }
+
+        code {
+            font-family: Consolas, Monaco, monospace;
+        }
+
+        .typing-indicator {
+            font-style: italic;
+            color: #888;
+            font-size: 0.9em;
+            display: none;
+            margin-bottom: 10px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h4>{{ agent_name }}</h4>
+                <div style="display:flex;gap:15px;align-items:center;">
+                    <button id="clearHistoryBtn" class="tools-link"
+                        style="background:none;border:none;cursor:pointer;font-size:0.9em;color:#dc3545;"
+                        title="Clear all chat history">🗑️ Clear</button>
+                    <a href="/settings" class="tools-link">⚙️ Configuration & Personas</a>
+                </div>
+            </div>
+
+            <div class="chat-messages" id="chatBox">
+                <!-- Chat history will be loaded dynamically from the /history API -->
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">Agent is thinking and using tools...</div>
+
+            <div class="chat-input">
+                <form id="chatForm">
+                    <input type="file" id="fileInput" style="display:none"
+                        accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.ppt,.pptx,.md,.json,.html">
+                    <button type="button" class="upload-btn" id="uploadBtn"
+                        title="Upload a file for the agent to read">📎</button>
+                    <input type="text" id="messageInput" placeholder="Type your message here..." required
+                        autocomplete="off">
+                    <button type="submit" class="btn btn-primary" id="sendBtn">Send</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        const chatForm = document.getElementById('chatForm');
+        const messageInput = document.getElementById('messageInput');
+        const chatBox = document.getElementById('chatBox');
+        const typingIndicator = document.getElementById('typingIndicator');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // Scroll to bottom helper
+        function scrollToBottom() {
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Add a message bubble to the chat window
+        function appendMessage(role, content) {
+            const div = document.createElement('div');
+            div.className = `message ${role === 'user' ? 'msg-user' : 'msg-agent'}`;
+
+            // Safety: ensure content is never null/undefined
+            const safeContent = content || '(No response received)';
+
+            if (role === 'agent') {
+                // Parse Markdown for Agent responses
+                div.innerHTML = marked.parse(safeContent);
+            } else {
+                div.textContent = safeContent;
+            }
+
+            chatBox.appendChild(div);
+            scrollToBottom();
+        }
+
+        // ========== LOAD PERSISTED HISTORY ON PAGE LOAD ==========
+        async function loadHistory() {
+            try {
+                const response = await fetch('/history');
+                const data = await response.json();
+                if (data.history && data.history.length > 0) {
+                    data.history.forEach(msg => {
+                        appendMessage(msg.role, msg.content);
+                    });
+                } else {
+                    // Show welcome message only when there is no history
+                    appendMessage('agent', 'Hello! I am your RigorousClaw assistant. How can I assist you today?');
+                }
+            } catch (err) {
+                appendMessage('agent', 'Hello! I am your RigorousClaw assistant. How can I assist you today?');
+            }
+        }
+        // Load history immediately when page opens
+        loadHistory();
+
+        // ========== CLEAR HISTORY ==========
+        document.getElementById('clearHistoryBtn').addEventListener('click', async () => {
+            if (!confirm('Are you sure you want to clear all chat history?')) return;
+            try {
+                await fetch('/clear_history', { method: 'POST' });
+                chatBox.innerHTML = '';
+                appendMessage('agent', 'Chat history cleared. How can I assist you?');
+            } catch (err) {
+                alert('Failed to clear history: ' + err.message);
+            }
+        });
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = messageInput.value.trim();
+            if (!text) return;
+
+            // Display User message
+            appendMessage('user', text);
+            messageInput.value = '';
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+
+            // Show typing indicator
+            typingIndicator.style.display = 'block';
+            scrollToBottom();
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+                const data = await response.json();
+
+                // Hide typing indicator
+                typingIndicator.style.display = 'none';
+
+                // Display Agent message
+                appendMessage('agent', data.response);
+            } catch (err) {
+                typingIndicator.style.display = 'none';
+                appendMessage('agent', 'Error communicating with the server: ' + err.message);
+            } finally {
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                messageInput.focus();
+            }
+        });
+
+        // File Upload Logic
+        const uploadBtn = document.getElementById('uploadBtn');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            appendMessage('user', `📎 Uploading: ${file.name}`);
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+            uploadBtn.disabled = true;
+            typingIndicator.style.display = 'block';
+            typingIndicator.textContent = `Uploading and reading ${file.name}...`;
+            scrollToBottom();
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                typingIndicator.style.display = 'none';
+
+                if (data.error) {
+                    appendMessage('agent', `Upload error: ${data.error}`);
+                } else {
+                    appendMessage('agent', data.response || `File ${file.name} uploaded successfully.`);
+                }
+            } catch (err) {
+                typingIndicator.style.display = 'none';
+                appendMessage('agent', 'Error uploading file: ' + err.message);
+            } finally {
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                uploadBtn.disabled = false;
+                messageInput.focus();
+                fileInput.value = ''; // Reset file input
+            }
+        });
+    </script>
+
+</body>
+
+</html>

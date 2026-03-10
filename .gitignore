@@ -1,0 +1,24 @@
+# Environment variables (contains API keys!)
+.env
+config.json
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Qdrant local database
+qdrant_db/
+
+# Chat history (contains private conversations)
+chat_history.json
+
+# Uploaded files
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
